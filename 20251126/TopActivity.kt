@@ -18,54 +18,10 @@ import com.bodycamera.ba.activity.Face3Activity.Companion.TAG
 import com.bodycamera.tests.R
 import com.bodycamera.tests.databinding.ActivityFace3Binding
 import com.yuy.api.manager.IBodyCameraService
-import android.annotation.SuppressLint
+
 // 認証モード選択画面（Face / Vein / Face+Vein）
 class TopActivity : AppCompatActivity() {
-    @SuppressLint("PrivateApi")
-    private fun getDeviceSerialNumber(): String {
-        return try {
-            val clazz = Class.forName("android.os.SystemProperties")
-            val get = clazz.getMethod("get", String::class.java)
 
-            // CHỈ LẤY vendor.gsm.serial (thiết bị của bạn cho phép truy cập)
-            val value = get.invoke(null, "vendor.gsm.serial") as String
-
-            if (!value.isNullOrEmpty() && value != "unknown") value else "UNKNOWN"
-
-        } catch (e: Exception) {
-            "UNKNOWN"
-        }
-    }
-    /*
-    @SuppressLint("PrivateApi")
-    private fun getDeviceSerialNumber(): String {
-        return try {
-            val clazz = Class.forName("android.os.SystemProperties")
-            val get = clazz.getMethod("get", String::class.java)
-
-            // thử lần lượt tất cả key có thể
-            val keys = listOf(
-                "ro.serialno",
-                "ro.boot.serialno",
-                "persist.sys.serialno",
-                "gsm.serial",
-                "vendor.gsm.serial",
-                "ril.serialnumber"
-            )
-
-            for (key in keys) {
-                val value = get.invoke(null, key) as String
-                if (!value.isNullOrEmpty() && value != "unknown") {
-                    return value
-                }
-            }
-
-            "UNKNOWN"
-        } catch (e: Exception) {
-            "UNKNOWN"
-        }
-    }
-*/
     // 共通変数を定義
     companion object {
         const val REQUEST_PALMSECURE = 9001
@@ -107,14 +63,9 @@ class TopActivity : AppCompatActivity() {
     // 本画面の初期表示
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
         binding = ActivityFace3Binding.inflate(layoutInflater)
         setContentView(R.layout.activity_top)
-
-        // ⚠️ LẤY SERIAL SAU KHI SET CONTENT VIEW
-        val serial = getDeviceSerialNumber()
-        Log.e("SERIAL_TEST", "Serial = $serial")
-        Toast.makeText(this, "Serial = $serial", Toast.LENGTH_LONG).show()
-
 
         bindService()
         initView()
