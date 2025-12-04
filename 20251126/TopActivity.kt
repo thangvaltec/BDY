@@ -1,4 +1,4 @@
-﻿package com.bodycamera.ba.activity
+package com.bodycamera.ba.activity
 
 import android.content.ActivityNotFoundException
 import android.content.ComponentName
@@ -19,9 +19,64 @@ import com.bodycamera.tests.R
 import com.bodycamera.tests.databinding.ActivityFace3Binding
 import com.yuy.api.manager.IBodyCameraService
 import android.annotation.SuppressLint
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.Callback
+import okhttp3.Response
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject
+import java.io.IOException
+//顔認証モード。。。。 メッセージ表示位置（画面上部・中央寄せ）
+//import android.view.Gravity
 // 認証モード選択画面（Face / Vein / Face+Vein）
 class TopActivity : AppCompatActivity() {
-    @SuppressLint("PrivateApi")
+    // 1) HÀM LẤY SERIAL (ở trên)
+    @SuppressLint("HardwareIds", "PrivateApi")
+    private fun getDeviceSerialNumber(): String {
+        return try {
+            val clazz = Class.forName("android.os.SystemProperties")
+            val get = clazz.getMethod("get", String::class.java)
+
+            val keys = listOf(
+                "vendor.gsm.serial",  // BodyCamera向けベンダー独自シリアル
+                "ro.serialno",
+                "ro.boot.serialno",
+                "persist.sys.serialno",
+                "gsm.serial",
+                "ril.serialnumber"
+            )
+
+            for (key in keys) {
+                var value = get.invoke(null, key) as String
+                if (!value.isNullOrEmpty() && value != "unknown") {
+                    value = value.trim()
+                    if (value.contains(" ")) {
+                        value = value.substringBefore(" ")
+                    }
+                    Log.d("SERIAL_TEST", "Found serial from $key = $value")
+                    return value
+                }
+            }
+
+            // ここまで来たらハードウェアシリアルは取得できなかった → ANDROID_ID にフォールバック
+            val androidId = android.provider.Settings.Secure.getString(
+                contentResolver,
+                android.provider.Settings.Secure.ANDROID_ID
+            )
+            Log.d("SERIAL_TEST", "Fallback ANDROID_ID = $androidId")
+
+            androidId ?: "UNKNOWN"
+
+        } catch (e: Exception) {
+            Log.e("SERIAL_TEST", "Error getDeviceSerialNumber: $e")
+            "UNKNOWN"
+        }
+    }
+
+
+
+    /*@SuppressLint("PrivateApi")
     private fun getDeviceSerialNumber(): String {
         return try {
             val clazz = Class.forName("android.os.SystemProperties")
@@ -36,6 +91,45 @@ class TopActivity : AppCompatActivity() {
             "UNKNOWN"
         }
     }
+    */
+    // 2) HÀM GỬI SERIAL LÊN API (đặt ở ngay dưới getDeviceSerialNumber)
+    private fun sendSerialToServer(serial: String, callback: (Int?) -> Unit) {
+
+        val client = OkHttpClient()
+
+        val json = JSONObject().apply { put("serialNo", serial) }
+
+        val body = json.toString()
+            .toRequestBody("application/json".toMediaType())
+
+        val request = Request.Builder()
+            .url("http://10.200.2.29:5000/api/device/getAuthMode")
+            .post(body)
+            .build()
+
+        client.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: okhttp3.Call, e: IOException) {
+                Log.e("API", "Send serial failed: $e")
+                callback(null)
+            }
+
+            override fun onResponse(call: okhttp3.Call, response: Response) {
+                val result = response.body?.string()
+                Log.d("API", "Response: $result")
+
+                try {
+                    val jsonObj = JSONObject(result)
+                    val authMode = jsonObj.getInt("authMode")
+                    callback(authMode)
+                } catch (e: Exception) {
+                    Log.e("API", "Parse error: $e")
+                    callback(null)
+                }
+            }
+        })
+    }
+
+
     /*
     @SuppressLint("PrivateApi")
     private fun getDeviceSerialNumber(): String {
@@ -107,19 +201,78 @@ class TopActivity : AppCompatActivity() {
     // 本画面の初期表示
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Log.e("DEBUG_CHECK", "onCreate STARTED")
+
         binding = ActivityFace3Binding.inflate(layoutInflater)
         setContentView(R.layout.activity_top)
+        Log.e("DEBUG_CHECK", "Layout is set")
 
-        // ⚠️ LẤY SERIAL SAU KHI SET CONTENT VIEW
+        // 1. serial取得処理
         val serial = getDeviceSerialNumber()
-        Log.e("SERIAL_TEST", "Serial = $serial")
-        Toast.makeText(this, "Serial = $serial", Toast.LENGTH_LONG).show()
+        Log.d("SERIAL_TEST", "Serial = $serial")
+        //Serial表示/非表示
+        //Toast.makeText(this, "Serial: $serial", Toast.LENGTH_LONG).show()
 
+        // 2. Gửi serial lên server
+        sendSerialToServer(serial) { authMode ->
+            runOnUiThread {
+                Log.d("API", "authMode from server = $authMode")
 
+                if (authMode == null) {
+                    Toast.makeText(
+                        this@TopActivity,
+                        "サーバーから認証モード（authMode）を取得できませんでした。",
+                        Toast.LENGTH_LONG
+                    ).show()
+                    return@runOnUiThread
+                }
+
+                // メッセージだけ作成
+                val msg = when (authMode) {
+                    0 -> "顔認証モード"
+                    1 -> "静脈認証モード"
+                    2 -> "顔＋静脈認証モード"
+                    else -> "authMode が不正のため、暫定的に『顔認証』を使用します。"
+                }
+
+                //ここから「顔認証モード。。。。」メッセージ表示
+                /*Log.d("API", "Toast message = $msg")
+
+                // メッセージ表示時間と位置（画面上部・中央寄せ）
+                val toast = Toast.makeText(this@TopActivity, msg, Toast.LENGTH_LONG)
+                toast.setGravity(
+                    Gravity.TOP or Gravity.CENTER_HORIZONTAL,  // 上＋中央
+                    0,                                         // X方向のずれ（0 = 中央）
+                    dpToPx(40)                                 // Y方向のオフセット（上からの距離）
+                )
+                toast.show()*/
+                Log.d("API", "Toast message = $msg")
+                //メッセージ表示時間と位置
+                //Toast.makeText(this@TopActivity, msg, Toast.LENGTH_LONG).show()
+                //toast.setGravity(Gravity.TOP, 0, 100)
+                Toast.makeText(this@TopActivity, msg, Toast.LENGTH_SHORT).show()
+                // ★ Flow3 対策：
+                // 顔認証結果(ResultName/ResultID)を持って TopActivity に戻ってきた場合は、
+                // ここで再度 顔認証アプリ を起動しない。initView() に任せて Palm に進ませる。
+                if (authMode == 2 && hasFaceResultExtra()) {
+                    // すでに「顔＋静脈」の途中（顔認証は終わっている）なので、
+                    // AuthMode だけ念のため保存して、あとは initView() に任せる。
+                    saveAuthMode("FaceAndVein")
+                    Log.d("FLOW3", "Face result already exists → skip auto start for Flow3 in onCreate()")
+                } else {
+                    // それ以外（初回起動 or Flow1/2）は今まで通り自動フロー開始
+                    startAuthFlowByMode(authMode)
+                }
+            }
+        }
+
+        // 3. Giữ nguyên phần này
+
+        // Kết nối BodyCamera Service
         bindService()
         initView()
         handleRetryIntent(intent)
-        handleFaceResultIntent(intent) // 顔のみフローの結果が Intent で返ってきた場合に対応
+        handleFaceResultIntent(intent)
         setClickListeners()
     }
 
@@ -458,6 +611,51 @@ class TopActivity : AppCompatActivity() {
             pendingFaceAndVeinRetry = true
         }
     }
+    // サーバーから受け取った authMode に応じて、自動的にフローを開始する
+    private fun startAuthFlowByMode(authMode: Int) {
+        when (authMode) {
+            0 -> {
+                // Flow1: 顔認証のみ
+                saveAuthMode("Face")
+                saveFaceResultPending(true)
+                launchFaceRecognitionForFaceOnly()
+            }
+            1 -> {
+                // Flow2: 静脈認証のみ
+                saveAuthMode("Vein")
+                saveFaceResultPending(false)
+                launchPalmSecure(
+                    mode = "identify",
+                    faceId = null,
+                    autoStart = true,
+                    returnResult = true,
+                    fromExternal = true
+                )
+            }
+            2 -> {
+                // Flow3: 顔＋静脈認証
+                saveAuthMode("FaceAndVein")
+                saveFaceResultPending(false)
+                launchFaceRecognition()
+                // 顔認証アプリに遷移するので、この画面は閉じる
+                finish()
+            }
+            else -> {
+                // 不正値の場合は暫定的に「顔認証」を使用
+                saveAuthMode("Face")
+                saveFaceResultPending(true)
+                launchFaceRecognitionForFaceOnly()
+            }
+        }
+    }
+    // 顔認証アプリから戻ってきているかどうかを判定するヘルパー
+    private fun hasFaceResultExtra(): Boolean {
+        val resultName = intent.getStringExtra("ResultName")
+        val resultID = intent.getStringExtra("ResultID")
+        return !resultName.isNullOrEmpty() || !resultID.isNullOrEmpty()
+    }
+
+
 
     private fun currentAuthMode(): String {
         return getSharedPreferences("AuthMode", MODE_PRIVATE)
@@ -478,4 +676,11 @@ class TopActivity : AppCompatActivity() {
             .putBoolean(KEY_FACE_PENDING, pending)
             .apply()
     }
+    /*
+    // メッセージ表示時間と位置（画面上部・中央寄せ）
+    private fun dpToPx(dp: Int): Int {
+        val scale = resources.displayMetrics.density
+        return (dp * scale + 0.5f).toInt()
+    }
+    */
 }
