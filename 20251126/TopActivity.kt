@@ -27,9 +27,6 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.io.IOException
-//顔認証モード。。。。 メッセージ表示位置（画面上部・中央寄せ）
-//import android.view.Gravity
-// 認証モード選択画面（Face / Vein / Face+Vein）
 class TopActivity : AppCompatActivity() {
     // 1) HÀM LẤY SERIAL (ở trên)
     @SuppressLint("HardwareIds", "PrivateApi")
@@ -129,37 +126,6 @@ class TopActivity : AppCompatActivity() {
         })
     }
 
-
-    /*
-    @SuppressLint("PrivateApi")
-    private fun getDeviceSerialNumber(): String {
-        return try {
-            val clazz = Class.forName("android.os.SystemProperties")
-            val get = clazz.getMethod("get", String::class.java)
-
-            // thử lần lượt tất cả key có thể
-            val keys = listOf(
-                "ro.serialno",
-                "ro.boot.serialno",
-                "persist.sys.serialno",
-                "gsm.serial",
-                "vendor.gsm.serial",
-                "ril.serialnumber"
-            )
-
-            for (key in keys) {
-                val value = get.invoke(null, key) as String
-                if (!value.isNullOrEmpty() && value != "unknown") {
-                    return value
-                }
-            }
-
-            "UNKNOWN"
-        } catch (e: Exception) {
-            "UNKNOWN"
-        }
-    }
-*/
     // 共通変数を定義
     companion object {
         const val REQUEST_PALMSECURE = 9001
@@ -235,21 +201,9 @@ class TopActivity : AppCompatActivity() {
                     else -> "authMode が不正のため、暫定的に『顔認証』を使用します。"
                 }
 
-                //ここから「顔認証モード。。。。」メッセージ表示
-                /*Log.d("API", "Toast message = $msg")
-
-                // メッセージ表示時間と位置（画面上部・中央寄せ）
-                val toast = Toast.makeText(this@TopActivity, msg, Toast.LENGTH_LONG)
-                toast.setGravity(
-                    Gravity.TOP or Gravity.CENTER_HORIZONTAL,  // 上＋中央
-                    0,                                         // X方向のずれ（0 = 中央）
-                    dpToPx(40)                                 // Y方向のオフセット（上からの距離）
-                )
-                toast.show()*/
-                Log.d("API", "Toast message = $msg")
                 //メッセージ表示時間と位置
+                Log.d("API", "Toast message = $msg")
                 //Toast.makeText(this@TopActivity, msg, Toast.LENGTH_LONG).show()
-                //toast.setGravity(Gravity.TOP, 0, 100)
                 Toast.makeText(this@TopActivity, msg, Toast.LENGTH_SHORT).show()
                 // ★ Flow3 対策：
                 // 顔認証結果(ResultName/ResultID)を持って TopActivity に戻ってきた場合は、
@@ -676,11 +630,4 @@ class TopActivity : AppCompatActivity() {
             .putBoolean(KEY_FACE_PENDING, pending)
             .apply()
     }
-    /*
-    // メッセージ表示時間と位置（画面上部・中央寄せ）
-    private fun dpToPx(dp: Int): Int {
-        val scale = resources.displayMetrics.density
-        return (dp * scale + 0.5f).toInt()
-    }
-    */
 }
